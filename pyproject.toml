@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "astra-codex-autopilot"
+version = "0.2.0"
+description = "Unattended Codex/Astra supervisor that checkpoints work and retries after plan usage limits reset."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Astra Codex Autopilot contributors"}]
+keywords = ["codex", "astra", "openai", "automation", "plugin", "skill"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+
+[project.scripts]
+astra-autopilot = "astra_supervisor.cli:main"
+astra-autopilot-app = "astra_supervisor.app_control:main"
+
+[project.urls]
+Homepage = "https://github.com/herohippo/astra-codex-autopilot"
+Issues = "https://github.com/herohippo/astra-codex-autopilot/issues"
+
+[tool.setuptools]
+package-dir = {"" = "plugins/astra-autopilot/python"}
+
+[tool.setuptools.packages.find]
+where = ["plugins/astra-autopilot/python"]
+
+[tool.pytest.ini_options]
+pythonpath = ["plugins/astra-autopilot/python"]
+testpaths = ["tests"]

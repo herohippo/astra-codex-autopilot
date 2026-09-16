@@ -1,0 +1,24 @@
+{
+  "name": "astra-autopilot",
+  "version": "0.2.0",
+  "author": {"name": "herohippo", "url": "https://github.com/herohippo"},
+  "homepage": "https://github.com/herohippo/astra-codex-autopilot",
+  "repository": "https://github.com/herohippo/astra-codex-autopilot",
+  "description": "Continue project work with native Codex app heartbeats or a standalone CLI supervisor, checkpoints, pause and resume.",
+  "license": "MIT",
+  "keywords": ["codex", "astra", "automation", "checkpoint", "unattended"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Astra Autopilot",
+    "shortDescription": "Resume autonomous Codex work after usage-limit resets",
+    "longDescription": "Choose native app follow-ups or a CLI background worker. Save project progress, wait through usage limits, and pause or resume. Requires a local project; app mode requires host heartbeat support.",
+    "developerName": "herohippo",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": [
+      "Astra Autopilot으로 이 프로젝트를 앱 모드에서 완료할 때까지 이어서 작업해줘.",
+      "이 프로젝트의 Astra Autopilot CLI 백그라운드 작업을 시작해줘.",
+      "이 프로젝트의 자동 작업을 일시정지하고 상태를 알려줘."
+    ]
+  }
+}

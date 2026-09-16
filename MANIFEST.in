@@ -1,0 +1,5 @@
+include LICENSE
+include README.md
+recursive-include plugins/astra-autopilot/skills *.md *.py
+include plugins/astra-autopilot/.codex-plugin/plugin.json
+include .agents/plugins/marketplace.json

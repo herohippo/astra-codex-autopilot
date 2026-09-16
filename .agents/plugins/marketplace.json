@@ -1,0 +1,20 @@
+{
+  "name": "astra-autopilot-marketplace",
+  "interface": {
+    "displayName": "Astra Autopilot"
+  },
+  "plugins": [
+    {
+      "name": "astra-autopilot",
+      "source": {
+        "source": "local",
+        "path": "./plugins/astra-autopilot"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

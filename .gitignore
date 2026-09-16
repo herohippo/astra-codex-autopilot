@@ -1,0 +1,21 @@
+__pycache__/
+.autopilot/
+.env
+.env.*
+!.env.example
+*.py[cod]
+.pytest_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Runtime state/logs should normally remain local.
+.autopilot/state.json
+.autopilot/logs/
+.autopilot/supervisor.lock
+.autopilot/STOP
+.autopilot/BLOCKED
+.autopilot/COMPLETE
+.autopilot/steering-history/
+.autopilot/launchd.*.log

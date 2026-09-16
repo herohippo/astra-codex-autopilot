@@ -1,0 +1,97 @@
+"""Local coordination for native Codex app heartbeats; never starts a CLI worker."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+
+from .core import SupervisorLock, get_status, iso_now, project_paths, set_marker
+
+
+def binding_path(project: Path) -> Path:
+    return project_paths(project)["base"] / "mode.json"
+
+
+def binding(project: Path) -> dict:
+    path = binding_path(project)
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def write_binding(project: Path, data: dict) -> None:
+    path = binding_path(project)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def require_owner(data: dict, owner: str) -> None:
+    if not owner:
+        raise RuntimeError("Current app task ID is required (--owner or CODEX_THREAD_ID).")
+    if data.get("mode") != "app" or data.get("owner") != owner:
+        raise RuntimeError("This app task does not own the project. Use the original task to pause/release it.")
+
+
+def control(project: Path, action: str, owner: str, automation_id: str = "",
+            automation_paused: bool = False) -> dict:
+    project = project.resolve()
+    p = project_paths(project)
+    if not p["master"].exists():
+        raise RuntimeError("Initialize the project first with init --goal.")
+    if action == "status":
+        return {**get_status(project), "binding": binding(project)}
+    # Brief OS lock also serializes mode switching with supervisor startup.
+    with SupervisorLock(p["lock"]):
+        data = binding(project)
+        if action == "claim":
+            if not owner:
+                raise RuntimeError("Current app task ID is required (--owner or CODEX_THREAD_ID).")
+            if data.get("mode") == "app" and data.get("owner") != owner:
+                raise RuntimeError("Another app task owns this project. Pause and release it there first.")
+            data = {**data, "mode": "app", "owner": owner, "updated_at": iso_now()}
+            write_binding(project, data)
+        elif action == "attach":
+            require_owner(data, owner)
+            if not automation_id.strip():
+                raise RuntimeError("A successfully created automation ID is required.")
+            if data.get("automation_id") not in (None, automation_id):
+                raise RuntimeError("A heartbeat is already attached. Update that automation instead of creating another.")
+            data.update(automation_id=automation_id, updated_at=iso_now())
+            write_binding(project, data)
+        elif action == "check":
+            require_owner(data, owner)
+        elif action == "pause":
+            require_owner(data, owner)
+            set_marker(project, "STOP", "Paused from the Codex app.\n")
+        elif action == "release":
+            require_owner(data, owner)
+            if not automation_paused or not p["stop"].exists():
+                raise RuntimeError("Pause the app automation, stop active app work, and set STOP before release; then pass --automation-paused.")
+            write_binding(project, {"mode": "cli", "updated_at": iso_now()})
+            data = binding(project)
+        # We hold this short control lock ourselves; it is not a running worker.
+        status = {**get_status(project), "running": False, "binding": data}
+        status["may_work"] = (data.get("mode") == "app" and data.get("owner") == owner
+                              and not any(p[k].exists() for k in ("complete", "blocked", "stop")))
+        return status
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--project", default=".")
+    parser.add_argument("action", choices=["claim", "attach", "check", "pause", "release", "status"])
+    parser.add_argument("--owner", default=os.environ.get("CODEX_THREAD_ID", ""))
+    parser.add_argument("--automation-id", default="")
+    parser.add_argument("--automation-paused", action="store_true")
+    args = parser.parse_args(argv)
+    try:
+        result = control(Path(args.project), args.action, args.owner,
+                         args.automation_id, args.automation_paused)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+    except (OSError, ValueError, RuntimeError) as exc:
+        parser.exit(1, f"ERROR: {exc}\n")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
