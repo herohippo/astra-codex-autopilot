@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- 한도 오류 후 고정 간격 모델 재시도를 공식 App Server 초기화 시각 기반 대기로 변경.
+- 소진된 창 중 가장 늦은 초기화 시각 + 기본 60초 여유, 재개 직전 재확인, 재시작 후 대기 복원.
+- 초기화 시각 불명·조회 실패 시 모델 작업을 보류하고 정보만 재조회.
+- 앱 helper도 할당량 확인을 수행하고 `next_check_at`을 반환. 앱 예약 호출 조정은 호스트 지원에 의존.
+- 조회 시간/출력 제한, 중지 처리, 비정상 응답 및 실행 시간 제한 회귀 테스트 추가.
+
 ## 0.2.0
 
 - Separate native Codex app heartbeat workflow from standalone CLI execution.

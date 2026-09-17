@@ -14,7 +14,9 @@ CLI 모드는 OS 프로세스로 실행되며 앱을 닫더라도 호스트 환�
 |---|---:|---|
 | model | gpt-6-astra | 계정에서 사용 가능한 모델 ID |
 | sandbox | workspace-write | read-only도 가능. 권한 우회 모드는 거부 |
-| quota_retry_seconds | 1800 | 사용량/요청 한도 오류 후 대기 |
+| quota_retry_seconds | 1800 | 초기화 시각 불명·조회 실패·오류와 조회 결과 불일치 시 정보만 재조회하는 간격(1~604800초) |
+| quota_reset_margin_seconds | 60 | 공식 초기화 시각 이후 여유 시간(0~86400초) |
+| quota_limit_id | codex | 조회할 할당량 버킷 ID. 모델명으로 추정하지 않으며 해당 버킷이 없으면 작업 보류 |
 | transient_retry_seconds | 180 | 일시적인 연결/서버 오류 후 대기 |
 | unknown_retry_seconds | 900 | 분류하지 못한 오류 후 대기 |
 | success_pause_seconds | 30 | 성공한 차례 다음 실행까지 대기 |
@@ -32,7 +34,11 @@ CLI 모드는 OS 프로세스로 실행되며 앱을 닫더라도 호스트 환�
 
 ## 상태와 중지
 
-`status`의 `running`은 CLI supervisor lock 점유 상태입니다. 앱 모드의 진행 상태는 앱 작업과 저장된 자동화 ID에서도 확인하세요. `next_retry_at`은 예상 다음 시도 시각으로 실제 서비스 할당량 복구 시각이 아닙니다.
+`status`의 `running`은 CLI supervisor lock 점유 상태입니다. 앱 모드의 진행 상태는 앱 작업과 저장된 자동화 ID에서도 확인하세요. `next_retry_at`은 다음 확인 예정 시각입니다. `quota_reset_at`은 마지막 공식 응답의 소진된 창 중 가장 늦은 초기화 시각에 여유 시간을 더한 값입니다. `quota_check_at`은 조회 시각, `quota_wait_reason`은 `reset_time`, `metadata_unavailable`, `available`입니다. 이 값은 실시간 잔여 할당량 보장이 아닙니다.
+
+할당량 오류 이후에는 사용 가능 상태가 확인될 때까지 `codex exec`를 실행하지 않습니다. 초기화 시각이 과거인데 계속 소진 상태이거나 응답이 불명확하면 정보만 재조회합니다. 조회는 20초 제한과 프로세스 정리를 적용하며 대기 중 STOP도 처리합니다. 앱 helper `check`도 이 확인을 수행합니다. 조회를 지원하지 않는 구형 CLI/인증 환경에서는 자동 작업이 보류되므로 Codex 업데이트와 로그인을 확인하세요.
+
+업그레이드 전에 실행 중인 CLI worker를 중지하세요. v0.2.0의 `quota_retry_seconds`는 그대로 읽지만 이제 개발 작업 재시도 간격이 아니라 정보 재조회 간격입니다. 기존 앱 heartbeat의 저장된 프롬프트도 새 스킬 지침으로 업데이트해야 합니다. 플러그인 파일 업데이트만으로 이미 저장된 자동화 프롬프트는 바뀌지 않습니다.
 
 - 정상 중지: `stop` → 현재 차례 종료 → `status`에서 running=false 확인.
 - 즉시 중지: `stop --now` → 관리 중인 Codex 프로세스 트리 종료. 이미 저장한 파일은 남습니다.

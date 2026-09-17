@@ -67,7 +67,8 @@ def test_lock_cannot_steal_and_recovers(tmp_path):
         pass
 
 
-def test_quota_then_success_and_complete(tmp_path):
+def test_quota_then_success_and_complete(tmp_path, monkeypatch):
+    monkeypatch.setattr("astra_supervisor.quota.read_limits", lambda *args: {"rateLimits": {"primary": {"usedPercent": 0}}})
     setup_project(tmp_path, '''count=Path('count')
 n=int(count.read_text()) if count.exists() else 0
 count.write_text(str(n+1))

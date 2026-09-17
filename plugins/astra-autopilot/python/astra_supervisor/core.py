@@ -32,6 +32,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "auth_mode": "chatgpt",
     "require_chatgpt_login": True,
     "quota_retry_seconds": 1800,
+    "quota_reset_margin_seconds": 60,
+    "quota_limit_id": "codex",
     "transient_retry_seconds": 180,
     "unknown_retry_seconds": 900,
     "success_pause_seconds": 30,
@@ -181,6 +183,9 @@ class SupervisorState:
     last_thread_id: str | None = None
     last_error: str | None = None
     next_retry_at: str | None = None
+    quota_wait_reason: str | None = None
+    quota_reset_at: str | None = None
+    quota_check_at: str | None = None
 
 
 def utc_now() -> datetime:
@@ -265,7 +270,7 @@ def validate_config(cfg: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Only verified ChatGPT login is supported; API billing is disabled")
     if cfg["extra_codex_args"] != []:
         raise ValueError("extra_codex_args must be empty; arbitrary execution overrides are not supported")
-    for key in ("quota_retry_seconds", "transient_retry_seconds", "unknown_retry_seconds", "success_pause_seconds",
+    for key in ("quota_retry_seconds", "quota_reset_margin_seconds", "transient_retry_seconds", "unknown_retry_seconds", "success_pause_seconds",
                 "max_turns", "max_runtime_seconds", "turn_timeout_seconds", "max_consecutive_unknown_errors",
                 "max_consecutive_transient_errors", "max_log_files", "log_tail_bytes"):
         value = cfg[key]
@@ -273,12 +278,16 @@ def validate_config(cfg: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"{key} must be a non-negative integer")
     if min(cfg["max_log_files"], cfg["max_consecutive_unknown_errors"], cfg["max_consecutive_transient_errors"]) < 1:
         raise ValueError("Log retention and consecutive error limits must be positive")
+    if cfg["quota_reset_margin_seconds"] > 86400 or not 1 <= cfg["quota_retry_seconds"] <= 604800:
+        raise ValueError("Quota reset margin must be <=86400; metadata retry must be 1..604800 seconds")
     if not 1024 <= cfg["log_tail_bytes"] <= 4 * 1024 * 1024:
         raise ValueError("log_tail_bytes must be between 1024 and 4194304")
     if cfg["log_dir"] != ".autopilot/logs":
         raise ValueError("log_dir must be .autopilot/logs")
     if not isinstance(cfg["model"], str) or not cfg["model"].strip():
         raise ValueError("model must be a nonempty string")
+    if not isinstance(cfg["quota_limit_id"], str) or not cfg["quota_limit_id"].strip():
+        raise ValueError("quota_limit_id must be a nonempty string")
     if not isinstance(cfg["codex_executable"], str) or not cfg["codex_executable"].strip():
         raise ValueError("codex_executable must be a single executable path")
     return cfg
@@ -805,6 +814,17 @@ def run_loop(project: Path, once: bool = False, force_lock: bool = False, ready_
                         continue
                 state.next_retry_at = None
                 save_state(project, state)
+            if state.last_result == "quota":
+                from .quota import refresh_quota
+                available = refresh_quota(project, cfg, state)
+                save_state(project, state)
+                if not available:
+                    if once:
+                        return 3
+                    continue
+            if cfg["max_runtime_seconds"] and time.monotonic() - began >= cfg["max_runtime_seconds"]:
+                set_marker(project, STOP_MARKER, "Configured max_runtime_seconds reached during quota lookup.\n")
+                return 0
             turn_cfg = dict(cfg)
             if remaining is not None:
                 cap = max(1, int(cfg["max_runtime_seconds"] - (time.monotonic() - began)))
@@ -818,7 +838,11 @@ def run_loop(project: Path, once: bool = False, force_lock: bool = False, ready_
                 archive_steering(project, result)
                 delay = cfg["success_pause_seconds"]
             elif result.kind == "quota":
-                delay = cfg["quota_retry_seconds"]
+                from .quota import refresh_quota
+                refresh_quota(project, cfg, state)
+                # A contradictory available response immediately after rejection
+                # must not produce a tight model retry loop.
+                delay = max(1, cfg["quota_retry_seconds"])
             elif result.kind == "transient":
                 delay = cfg["transient_retry_seconds"]
             elif result.kind == "unknown":
@@ -829,7 +853,7 @@ def run_loop(project: Path, once: bool = False, force_lock: bool = False, ready_
                 set_marker(project, BLOCKED_MARKER, f"{result.kind}: {result.error_text}\nReview and resume --blocked.\n")
             if state.consecutive_unknown_errors >= cfg["max_consecutive_unknown_errors"] or state.consecutive_transient_errors >= cfg["max_consecutive_transient_errors"]:
                 set_marker(project, BLOCKED_MARKER, "Repeated execution errors. Inspect logs before resume --blocked.\n")
-            if delay or result.kind in ("quota", "transient", "unknown"):
+            if (delay or result.kind in ("quota", "transient", "unknown")) and not state.next_retry_at:
                 state.next_retry_at = datetime.fromtimestamp(utc_now().timestamp() + max(1, delay), timezone.utc).isoformat()
             save_state(project, state)
             if once:

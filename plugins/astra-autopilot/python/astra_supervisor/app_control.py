@@ -6,7 +6,9 @@ import json
 import os
 from pathlib import Path
 
-from .core import SupervisorLock, get_status, iso_now, project_paths, set_marker
+from .core import (SupervisorLock, get_status, iso_now, project_paths, set_marker,
+                   load_config, load_state, save_state, utc_now)
+from datetime import datetime
 
 
 def binding_path(project: Path) -> Path:
@@ -60,6 +62,13 @@ def control(project: Path, action: str, owner: str, automation_id: str = "",
             write_binding(project, data)
         elif action == "check":
             require_owner(data, owner)
+            if not any(p[k].exists() for k in ("complete", "blocked", "stop")):
+                from .quota import refresh_quota
+                state = load_state(project)
+                due = not state.next_retry_at or datetime.fromisoformat(state.next_retry_at).timestamp() <= utc_now().timestamp()
+                if due:
+                    refresh_quota(project, load_config(project), state)
+                    save_state(project, state)
         elif action == "pause":
             require_owner(data, owner)
             set_marker(project, "STOP", "Paused from the Codex app.\n")
@@ -73,6 +82,13 @@ def control(project: Path, action: str, owner: str, automation_id: str = "",
         status = {**get_status(project), "running": False, "binding": data}
         status["may_work"] = (data.get("mode") == "app" and data.get("owner") == owner
                               and not any(p[k].exists() for k in ("complete", "blocked", "stop")))
+        if action == "check":
+            state = load_state(project)
+            status["may_work"] = status["may_work"] and state.quota_wait_reason == "available"
+            if state.next_retry_at and datetime.fromisoformat(state.next_retry_at).timestamp() > utc_now().timestamp():
+                status["may_work"] = False
+            status["next_check_at"] = state.next_retry_at
+            status["quota_wait_reason"] = state.quota_wait_reason
         return status
 
 
