@@ -63,7 +63,7 @@ def read_limits(project, cfg, timeout=20):
                         raise RuntimeError("Quota service rejected request")
                     return message["result"]
             raise RuntimeError("Quota lookup timed out")
-        send({"id": 1, "method": "initialize", "params": {"clientInfo": {"name": "astra_autopilot", "version": "0.3.0"}}})
+        send({"id": 1, "method": "initialize", "params": {"clientInfo": {"name": "astra_autopilot", "version": "0.4.0"}}})
         response(1)
         send({"method": "initialized", "params": {}})
         send({"id": 2, "method": "account/rateLimits/read"})

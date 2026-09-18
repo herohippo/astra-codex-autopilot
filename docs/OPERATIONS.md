@@ -67,3 +67,14 @@ CLI 모드는 OS 프로세스로 실행되며 앱을 닫더라도 호스트 환�
 작업을 먼저 중지합니다. Git clone 설치는 `git pull --ff-only` 후 같은 Python으로 `python -m pip install --user .`를 실행합니다. marketplace 업데이트는 설치된 Codex의 `plugin marketplace --help`에 맞춰 수행하고 플러그인을 다시 설치한 뒤 새 세션을 여세요.
 
 플러그인 제거: `codex plugin remove astra-autopilot@astra-autopilot-marketplace` (현재 CLI 도움말로 selector 확인). Python CLI 제거: `python -m pip uninstall astra-codex-autopilot`. **제거 전에 앱 heartbeat와 CLI worker를 중지하세요.** 플러그인 제거가 별도로 만든 자동화까지 제거하지는 않습니다. 프로젝트 결과물은 그대로 남습니다.
+
+## 완료 후 예약 자동 삭제 (v0.4.0)
+
+- 모든 완료 기준과 관련 검증을 충족하면 근거와 COMPLETE를 저장하고, 이 프로젝트에 연결된 예약만 호스트 도구로 삭제합니다.
+- 실제 삭제 성공을 확인한 뒤 앱 helper `finish --automation-id ID --automation-deleted`로 연결 ID를 정리합니다. 소스·체크포인트·로그·완료 근거는 보존합니다. 이 명령 자체가 호스트 예약을 삭제하지는 않습니다.
+- 삭제에 실패하거나 호스트가 삭제 기능을 제공하지 않으면 ID를 보존하고 예약을 일시정지할 수 있는 경우 정지한 뒤 사용자에게 미완료 정리를 알립니다. 삭제했다고 보고하지 않습니다.
+- 사용자 중지(STOP), 진행 불가(BLOCKED)는 예약을 일시정지하고 보존합니다. 할당량 대기는 기존 초기화 시각 기반 정책을 유지합니다.
+- CLI는 완료 시 프로세스가 종료되며 별도 앱 예약을 생성하지 않습니다. 다른 프로젝트의 예약은 삭제하지 않습니다.
+- 완료 후 추가 개발은 새 요청으로 목표를 수정하고 완료 상태를 명시적으로 해제한 후 새 예약을 연결합니다. 단순 재개로 완료된 작업의 예약을 다시 만들지 않습니다.
+
+업데이트 후 기존 예약에도 이 정책과 새 helper 경로를 적용해야 합니다. 플러그인 설치만으로 저장된 예약 프롬프트가 바뀌지는 않습니다.
